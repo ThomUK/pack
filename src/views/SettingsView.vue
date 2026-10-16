@@ -12,6 +12,18 @@ const router = useRouter()
 
 const me = computed(() => repo.me())
 const lastSync = computed(() => (repo.lastSync ? repo.lastSync.toLocaleTimeString() : 'never'))
+const buildId = __BUILD_ID__
+const buildTime = new Date(__BUILD_TIME__).toLocaleString()
+
+async function checkForUpdate() {
+  const reg = await navigator.serviceWorker?.getRegistration()
+  if (!reg) {
+    ui.toast('Not installed as an app in this browser', 'info')
+    return
+  }
+  await reg.update()
+  ui.toast(reg.installing || reg.waiting ? 'Update found; it will reload shortly' : 'You have the latest version', 'success')
+}
 
 async function refresh() {
   await repo.refresh()
@@ -53,6 +65,12 @@ async function disconnect() {
         <router-link class="btn" :to="{ name: 'setup' }">Change token or repo</router-link>
         <button class="danger" @click="disconnect">Disconnect this device</button>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>App version</h2>
+      <p class="small">Build <span class="kbd">{{ buildId }}</span> · {{ buildTime }}</p>
+      <button class="small" @click="checkForUpdate">Check for update</button>
     </div>
 
     <div class="card flat small muted">

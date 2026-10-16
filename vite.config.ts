@@ -5,9 +5,15 @@ import { fileURLToPath, URL } from 'node:url'
 
 // GitHub Pages serves the app at https://<owner>.github.io/pack/
 const base = process.env.VITE_BASE ?? '/pack/'
+const buildId = (process.env.GITHUB_SHA ?? 'dev').slice(0, 7)
+const buildTime = new Date().toISOString()
 
 export default defineConfig({
   base,
+  define: {
+    __BUILD_ID__: JSON.stringify(buildId),
+    __BUILD_TIME__: JSON.stringify(buildTime),
+  },
   plugins: [
     vue(),
     VitePWA({

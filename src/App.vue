@@ -46,6 +46,9 @@ const banner = computed(() => {
   <router-view />
   <BottomNav v-if="showNav" />
   <div class="toasts">
-    <div v-for="t in ui.toasts" :key="t.id" class="toast" :class="t.kind">{{ t.text }}</div>
+    <div v-for="t in ui.toasts" :key="t.id" class="toast row between" :class="t.kind">
+      <span>{{ t.text }}</span>
+      <button v-if="t.action" class="small" @click="t.action.run(); ui.dismiss(t.id)">{{ t.action.label }}</button>
+    </div>
   </div>
 </template>

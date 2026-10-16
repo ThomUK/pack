@@ -3,10 +3,16 @@ import { ref } from 'vue'
 
 export type ToastKind = 'info' | 'success' | 'error' | 'saving'
 
+export interface ToastAction {
+  label: string
+  run: () => void
+}
+
 export interface Toast {
   id: number
   kind: ToastKind
   text: string
+  action?: ToastAction
 }
 
 let nextId = 1
@@ -22,9 +28,9 @@ export const useUiStore = defineStore('ui', () => {
     setInterval(() => (now.value = new Date()), 30 * 1000)
   }
 
-  function toast(text: string, kind: ToastKind = 'info', ms = 2500): number {
+  function toast(text: string, kind: ToastKind = 'info', ms = 2500, action?: ToastAction): number {
     const id = nextId++
-    toasts.value.push({ id, kind, text })
+    toasts.value.push({ id, kind, text, action })
     if (ms > 0) setTimeout(() => dismiss(id), ms)
     return id
   }

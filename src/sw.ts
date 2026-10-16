@@ -1,8 +1,14 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching'
 import { registerRoute, NavigationRoute } from 'workbox-routing'
+import { clientsClaim } from 'workbox-core'
 
 declare let self: ServiceWorkerGlobalScope
+
+// A new build takes over as soon as it has installed, so a refresh picks up the
+// latest version instead of waiting for every window of the app to close.
+self.addEventListener('install', () => void self.skipWaiting())
+clientsClaim()
 
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
