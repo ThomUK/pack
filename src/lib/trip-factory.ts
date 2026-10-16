@@ -122,6 +122,7 @@ export function createTripFromTemplates(input: NewTripInput, templates: TripTemp
     version: 1,
     id: tripId(input.startDate, input.name, existingIds),
     name: input.name.trim(),
+    startDate: input.startDate,
     typeIds: templates.map((t) => t.id),
     travellers: travellers.map((p) => p.id),
     notes: input.notes ?? '',
@@ -173,12 +174,13 @@ export function cloneTrip(
 ): { trip: Trip; packing: PackingList[] } {
   const now = nowIso()
   const travellers = family.people.filter((p) => input.travellers.includes(p.id))
-  const shiftDays = daysBetween(source.legs.length ? earliestLocalDate(source.legs) : input.startDate, input.startDate)
+  const datedSource = source.legs.filter((l) => l.departAt.local)
+  const shiftDays = daysBetween(datedSource.length ? earliestLocalDate(datedSource) : (source.startDate ?? input.startDate), input.startDate)
   const legs: Leg[] = source.legs.map((l) => ({
     ...l,
     id: uid(),
-    departAt: { ...l.departAt, local: shiftLocal(l.departAt.local, shiftDays) },
-    arriveAt: { ...l.arriveAt, local: shiftLocal(l.arriveAt.local, shiftDays) },
+    departAt: { ...l.departAt, local: l.departAt.local ? shiftLocal(l.departAt.local, shiftDays) : '' },
+    arriveAt: { ...l.arriveAt, local: l.arriveAt.local ? shiftLocal(l.arriveAt.local, shiftDays) : '' },
     attachmentIds: [],
   }))
   const bags: Bag[] = source.bags.map((b) => ({ ...b, id: uid(), measuredKg: null, measuredAt: null }))
@@ -200,6 +202,7 @@ export function cloneTrip(
     version: 1,
     id: tripId(input.startDate, input.name, existingIds),
     name: input.name.trim(),
+    startDate: input.startDate,
     typeIds: [...source.typeIds],
     travellers: travellers.map((p) => p.id),
     notes: source.notes,

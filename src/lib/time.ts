@@ -101,6 +101,15 @@ export function localDate(lt: LocalTime): string {
   return lt.local.slice(0, 10)
 }
 
+export function hasTime(lt: LocalTime | null | undefined): lt is LocalTime {
+  return !!lt && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(lt.local)
+}
+
+/** Absolute time of a LocalTime, or null when it has not been entered yet. */
+export function toDate(lt: LocalTime | null | undefined): Date | null {
+  return hasTime(lt) ? localTimeToDate(lt) : null
+}
+
 // ── formatting ───────────────────────────────────────────────────────────────
 
 export function fmtTime(date: Date, tz: string): string {
@@ -124,7 +133,8 @@ export function tzShort(date: Date, tz: string): string {
  * Local time plus home time when they differ: "10:00 CET · 09:00 UK".
  * Returns { local, home } strings; `home` is null when zones give the same wall time.
  */
-export function dualTime(lt: LocalTime, homeTz: string): { date: Date; local: string; home: string | null } {
+export function dualTime(lt: LocalTime, homeTz: string): { date: Date | null; local: string; home: string | null } {
+  if (!hasTime(lt)) return { date: null, local: 'time TBC', home: null }
   const date = localTimeToDate(lt)
   const local = `${fmtTime(date, lt.tz)} ${tzShort(date, lt.tz)}`
   if (lt.tz === homeTz) return { date, local, home: null }
@@ -137,23 +147,54 @@ export function dualTime(lt: LocalTime, homeTz: string): { date: Date; local: st
 
 // ── trip timing ──────────────────────────────────────────────────────────────
 
+/** Legs in time order; legs without a departure time keep their entry order at the end. */
 export function sortedLegs(trip: Trip): Leg[] {
-  return [...trip.legs].sort((a, b) => localTimeToDate(a.departAt).getTime() - localTimeToDate(b.departAt).getTime())
+  const dated = trip.legs.filter((l) => hasTime(l.departAt)).sort((a, b) => localTimeToDate(a.departAt).getTime() - localTimeToDate(b.departAt).getTime())
+  const undated = trip.legs.filter((l) => !hasTime(l.departAt))
+  return [...dated, ...undated]
 }
 
+export function datedLegs(trip: Trip): Leg[] {
+  return sortedLegs(trip).filter((l) => hasTime(l.departAt))
+}
+
+/** The trip's start date (YYYY-MM-DD); older trips without the field derive it from the id. */
+export function tripStartDate(trip: Trip): string | null {
+  if (trip.startDate && /^\d{4}-\d{2}-\d{2}$/.test(trip.startDate)) return trip.startDate
+  const m = trip.id.match(/^(\d{4}-\d{2}-\d{2})/)
+  return m ? m[1]! : null
+}
+
+function startOfDay(date: string): Date {
+  return new Date(`${date}T00:00:00`)
+}
+function endOfDay(date: string): Date {
+  return new Date(`${date}T23:59:59`)
+}
+
+/** Departure: the first timed leg, else midnight at the start of the start date. */
 export function departureDate(trip: Trip): Date | null {
-  const legs = sortedLegs(trip)
-  return legs.length ? localTimeToDate(legs[0]!.departAt) : null
+  const legs = datedLegs(trip)
+  if (legs.length) return localTimeToDate(legs[0]!.departAt)
+  const sd = tripStartDate(trip)
+  return sd ? startOfDay(sd) : null
+}
+
+/** True when the countdown is only based on the start date, not an actual leg. */
+export function departureIsEstimate(trip: Trip): boolean {
+  return datedLegs(trip).length === 0
 }
 
 export function endDate(trip: Trip): Date | null {
-  if (!trip.legs.length) return null
-  return new Date(Math.max(...trip.legs.map((l) => localTimeToDate(l.arriveAt).getTime())))
+  const arrivals = trip.legs.map((l) => toDate(l.arriveAt)).filter((d): d is Date => !!d)
+  if (arrivals.length) return new Date(Math.max(...arrivals.map((d) => d.getTime())))
+  const sd = tripStartDate(trip)
+  return sd ? endOfDay(sd) : null
 }
 
 /** The leg where the return journey begins (explicit, else first leg after the last stay). */
 export function returnLeg(trip: Trip): Leg | null {
-  const legs = sortedLegs(trip)
+  const legs = datedLegs(trip)
   if (!legs.length) return null
   if (trip.returnStartsAtLegId) {
     const l = legs.find((x) => x.id === trip.returnStartsAtLegId)
@@ -169,7 +210,7 @@ export function returnLeg(trip: Trip): Leg | null {
 
 export function returnDate(trip: Trip): Date | null {
   const l = returnLeg(trip)
-  return l ? localTimeToDate(l.departAt) : null
+  return l ? toDate(l.departAt) : null
 }
 
 export type TripState = 'upcoming' | 'current' | 'archived' | 'unscheduled'
@@ -189,7 +230,7 @@ export function anchorDate(trip: Trip, anchor: DueAnchor): Date | null {
   if (anchor === 'departure') return departureDate(trip)
   if (anchor === 'return') return returnDate(trip)
   const leg = trip.legs.find((l) => l.id === anchor.legId)
-  return leg ? localTimeToDate(leg.departAt) : null
+  return leg ? toDate(leg.departAt) : null
 }
 
 export function dueDate(trip: Trip, due: Due): Date | null {
@@ -206,8 +247,9 @@ export function taskDueDate(trip: Trip, task: Task): Date | null {
 export function checkinOpensDate(trip: Trip, legId: string | null, opens: CheckinOpens): Date | null {
   if (opens.kind === 'fixed') return new Date(opens.at)
   const leg = legId ? trip.legs.find((l) => l.id === legId) : null
-  if (!leg) return null
-  return new Date(localTimeToDate(leg.departAt).getTime() - opens.hoursBefore * 3600 * 1000)
+  const dep = leg ? toDate(leg.departAt) : null
+  if (!dep) return null
+  return new Date(dep.getTime() - opens.hoursBefore * 3600 * 1000)
 }
 
 export type DueState = 'none' | 'overdue' | 'today' | 'soon' | 'later'
@@ -223,7 +265,7 @@ export function dueState(dueAt: Date | null, now: Date = new Date()): DueState {
 
 export function describeDue(trip: Trip, due: Due, homeTz: string, now: Date = new Date()): string {
   const d = dueDate(trip, due)
-  if (!d) return due.kind === 'none' ? '' : 'Due date needs a leg'
+  if (!d) return due.kind === 'none' ? '' : 'Due date needs a timed leg'
   const ms = d.getTime() - now.getTime()
   const days = Math.floor(ms / 86400000)
   if (ms < 0) {

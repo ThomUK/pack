@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { localTimeToDate, dateToLocalTime, dualTime, tripState, returnLeg, dueDate, countdown, tzOffsetMinutes } from './time'
+import { localTimeToDate, dateToLocalTime, dualTime, tripState, returnLeg, dueDate, countdown, tzOffsetMinutes, departureDate, departureIsEstimate, tripStartDate, sortedLegs, endDate } from './time'
 import type { Trip, Leg } from './models'
 
 function leg(id: string, kind: Leg['kind'], dep: string, arr: string, tz = 'Europe/London'): Leg {
@@ -11,6 +11,7 @@ function trip(legs: Leg[], returnStartsAtLegId: string | null = null): Trip {
     version: 1,
     id: 't',
     name: 'T',
+    startDate: '2027-02-14',
     typeIds: [],
     travellers: [],
     notes: '',
@@ -79,6 +80,21 @@ describe('trip timing', () => {
     expect(dueDate(t, { kind: 'relative', anchor: 'return', offsetHours: -24 })?.toISOString()).toBe('2027-02-20T13:00:00.000Z')
     expect(dueDate(t, { kind: 'relative', anchor: { legId: 'fly' }, offsetHours: -24 })?.toISOString()).toBe('2027-02-13T08:00:00.000Z')
     expect(dueDate(t, { kind: 'none' })).toBeNull()
+  })
+  it('falls back to the start date when there are no timed legs', () => {
+    const bare = trip([])
+    expect(departureDate(bare)?.getFullYear()).toBe(2027)
+    expect(departureIsEstimate(bare)).toBe(true)
+    expect(tripState(bare, new Date('2027-01-01T00:00:00'))).toBe('upcoming')
+    expect(tripState(bare, new Date('2027-02-14T12:00:00'))).toBe('current')
+    expect(tripState(bare, new Date('2027-02-16T12:00:00'))).toBe('archived')
+    expect(tripStartDate({ ...bare, startDate: '' as string, id: '2026-05-01-old' })).toBe('2026-05-01')
+  })
+  it('keeps undated legs at the end and ignores them for timing', () => {
+    const t2 = trip([leg('b', 'flight', '2027-02-14T08:00', '2027-02-14T11:00'), { ...leg('x', 'stay', '', ''), departAt: { local: '', tz: 'Europe/London' }, arriveAt: { local: '', tz: 'Europe/London' } }])
+    expect(sortedLegs(t2).map((l) => l.id)).toEqual(['b', 'x'])
+    expect(departureIsEstimate(t2)).toBe(false)
+    expect(endDate(t2)?.toISOString()).toBe('2027-02-14T11:00:00.000Z')
   })
   it('countdown splits into days/hours/minutes', () => {
     const c = countdown(new Date('2027-02-14T04:00:00Z'), new Date('2027-02-12T01:30:00Z'))

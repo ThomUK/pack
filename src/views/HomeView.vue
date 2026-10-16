@@ -6,7 +6,8 @@ import { useConfigStore } from '@/stores/config'
 import { useUiStore } from '@/stores/ui'
 import { useCurrentTrip } from '@/composables/useCurrentTrip'
 import { tripOps } from '@/lib/ops'
-import { departureDate, returnDate, returnLeg, sortedLegs, countdown, tripState, fmtDateTime, checkinOpensDate, taskDueDate } from '@/lib/time'
+import { departureDate, departureIsEstimate, returnDate, returnLeg, datedLegs, countdown, tripState, fmtDateTime, fmtDate, checkinOpensDate, taskDueDate } from '@/lib/time'
+import { setupTodos } from '@/lib/setup-todos'
 import { tasksWithDue, sortByDue, beforeCompletion, completion, perPerson, shoppingList, isMine } from '@/lib/progress'
 import { buildIcs, downloadIcs, type IcsEvent } from '@/lib/ics'
 import type { Task, CheckinTaskFields } from '@/lib/models'
@@ -26,9 +27,11 @@ const homeTz = computed(() => repo.family?.homeTimezone ?? 'UTC')
 const me = computed(() => repo.me())
 const state = computed(() => (trip.value ? tripState(trip.value, ui.now) : 'unscheduled'))
 
-const legs = computed(() => (trip.value ? sortedLegs(trip.value) : []))
+const legs = computed(() => (trip.value ? datedLegs(trip.value) : []))
 const firstLeg = computed(() => legs.value[0] ?? null)
 const dep = computed(() => (trip.value ? departureDate(trip.value) : null))
+const depEstimate = computed(() => !!trip.value && departureIsEstimate(trip.value))
+const todoCount = computed(() => (trip.value ? setupTodos(trip.value, people.value, repo.packingLists(trip.value.id)).length : 0))
 const ret = computed(() => (trip.value ? returnDate(trip.value) : null))
 const retLeg = computed(() => (trip.value ? returnLeg(trip.value) : null))
 const depCountdown = computed(() => (dep.value ? countdown(dep.value, ui.now) : null))
@@ -113,7 +116,8 @@ function exportCalendar() {
       <div class="card" style="text-align: center">
         <template v-if="dep && depCountdown">
           <div class="small muted" style="margin-bottom: 0.5rem">
-            {{ depCountdown.past ? 'Departed' : 'Departing' }} {{ fmtDateTime(dep, homeTz) }}<template v-if="firstLeg"> · {{ firstLeg.title }}</template>
+            <template v-if="depEstimate">{{ depCountdown.past ? 'Started' : 'Starts' }} {{ fmtDate(dep, homeTz) }} · <router-link :to="{ name: 'trip', params: { id: trip.id } }">add legs for an exact time</router-link></template>
+            <template v-else>{{ depCountdown.past ? 'Departed' : 'Departing' }} {{ fmtDateTime(dep, homeTz) }}<template v-if="firstLeg"> · {{ firstLeg.title }}</template></template>
           </div>
           <div v-if="!depCountdown.past" class="countdown">
             <div><b>{{ depCountdown.days }}</b><span>days</span></div>
@@ -123,14 +127,19 @@ function exportCalendar() {
           <div v-else class="chip accent">{{ state === 'archived' ? 'Trip over' : 'On the trip' }}</div>
         </template>
         <template v-else>
-          <p class="muted">No legs yet, so no countdown.</p>
-          <router-link class="btn" :to="{ name: 'trip', params: { id: trip.id } }">Add the itinerary</router-link>
+          <p class="muted">No start date or legs yet, so no countdown.</p>
+          <router-link class="btn" :to="{ name: 'trip', params: { id: trip.id } }">Set up the trip</router-link>
         </template>
         <div v-if="before" style="margin-top: 0.9rem; text-align: left">
           <div class="row between small"><span>Ready to go</span><b>{{ before.pct }}%</b></div>
           <Progress :done="before.done" :total="before.total" />
         </div>
       </div>
+
+      <router-link v-if="todoCount" class="card row between" style="text-decoration: none; color: inherit" :to="{ name: 'trip', params: { id: trip.id } }">
+        <span><b>Trip setup</b> <span class="muted small">· {{ todoCount }} thing{{ todoCount === 1 ? '' : 's' }} to sort out</span></span>
+        <span class="chip warn">{{ todoCount }}</span>
+      </router-link>
 
       <!-- Return countdown -->
       <div v-if="ret && retCountdown && retLeg" class="card">

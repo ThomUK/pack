@@ -6,7 +6,9 @@ import { useConfigStore } from '@/stores/config'
 import { useUiStore } from '@/stores/ui'
 import { tripOps } from '@/lib/ops'
 import { uid, nowIso } from '@/lib/ids'
-import { sortedLegs, returnLeg, tripState, fmtDate, localTimeToDate, dateToLocalTime } from '@/lib/time'
+import { sortedLegs, returnLeg, tripState, fmtDate, localTimeToDate, dateToLocalTime, hasTime, tripStartDate } from '@/lib/time'
+import { setupTodos, hasFlight, type SetupTodo } from '@/lib/setup-todos'
+import SetupTodoList from '@/components/SetupTodoList.vue'
 import { tasksForNewTraveller, packingForNewTraveller } from '@/lib/trip-factory'
 import { LEG_KIND_LABELS, BOOKING_KIND_LABELS, type Leg, type Bag } from '@/lib/models'
 import Sheet from '@/components/Sheet.vue'
@@ -29,6 +31,35 @@ const legs = computed(() => (trip.value ? sortedLegs(trip.value) : []))
 const retLeg = computed(() => (trip.value ? returnLeg(trip.value) : null))
 const state = computed(() => (trip.value ? tripState(trip.value, ui.now) : 'unscheduled'))
 const isCurrent = computed(() => cfg.config.currentTripId === props.id)
+const startDate = computed(() => (trip.value ? tripStartDate(trip.value) : null))
+const showBags = computed(() => !!trip.value && (hasFlight(trip.value) || trip.value.bags.length > 0))
+const todos = computed(() => (trip.value ? setupTodos(trip.value, people.value, repo.packingLists(trip.value.id)) : []))
+function goTodo(t: SetupTodo) {
+  const tr = trip.value
+  if (!tr) return
+  switch (t.target.kind) {
+    case 'legs':
+      newLeg()
+      break
+    case 'leg': {
+      const l = tr.legs.find((x) => x.id === (t.target as { legId: string }).legId)
+      if (l) editLeg(l)
+      break
+    }
+    case 'bags':
+      newBag('hold')
+      break
+    case 'travellers':
+      openEdit()
+      break
+    case 'task':
+      router.push({ name: 'task', params: { id: tr.id, taskId: t.target.taskId } })
+      break
+    case 'packing':
+      router.push({ name: 'packing', params: { id: tr.id, personId: t.target.personId } })
+      break
+  }
+}
 
 const personName = (id: string | null) => people.value.find((p) => p.id === id)?.name ?? (id ? id : 'Shared')
 
@@ -36,18 +67,20 @@ const personName = (id: string | null) => people.value.find((p) => p.id === id)?
 const editing = ref(false)
 const draftName = ref('')
 const draftNotes = ref('')
+const draftStart = ref('')
 const draftTravellers = ref<string[]>([])
 function openEdit() {
   if (!trip.value) return
   draftName.value = trip.value.name
   draftNotes.value = trip.value.notes
+  draftStart.value = tripStartDate(trip.value) ?? ''
   draftTravellers.value = [...trip.value.travellers]
   editing.value = true
 }
 async function saveEdit() {
   const t = trip.value
   if (!t || !family.value) return
-  repo.commitTrip(t.id, tripOps.patch({ name: draftName.value.trim() || t.name, notes: draftNotes.value, travellers: draftTravellers.value }))
+  repo.commitTrip(t.id, tripOps.patch({ name: draftName.value.trim() || t.name, notes: draftNotes.value, travellers: draftTravellers.value, startDate: draftStart.value || t.startDate }))
   // New travellers get their per-traveller tasks and a packing list.
   const added = draftTravellers.value.filter((id) => !t.travellers.includes(id))
   const templates = repo.templates
@@ -70,9 +103,9 @@ async function saveEdit() {
 // ── legs ───────────────────────────────────────────────────────────────────
 const legSheet = ref<{ leg: Leg; isNew: boolean } | null>(null)
 function newLeg() {
-  const last = legs.value.at(-1)
+  const last = legs.value.filter((l) => hasTime(l.arriveAt)).at(-1)
   const tz = last?.arriveAt.tz ?? homeTz.value
-  const startLocal = last ? last.arriveAt.local : `${new Date().toISOString().slice(0, 10)}T08:00`
+  const startLocal = last ? last.arriveAt.local : `${startDate.value ?? new Date().toISOString().slice(0, 10)}T08:00`
   legSheet.value = {
     isNew: true,
     leg: {
@@ -107,10 +140,11 @@ function setReturnStart(l: Leg) {
   repo.commitTrip(trip.value.id, tripOps.patch({ returnStartsAtLegId: trip.value.returnStartsAtLegId === l.id ? null : l.id }))
 }
 function legDate(l: Leg) {
-  return fmtDate(localTimeToDate(l.departAt), l.departAt.tz)
+  return hasTime(l.departAt) ? fmtDate(localTimeToDate(l.departAt), l.departAt.tz) : 'Date TBC'
 }
 function shiftedAfter(l: Leg): boolean {
   // whether the arrival is on a later local day than departure (overnight)
+  if (!hasTime(l.departAt) || !hasTime(l.arriveAt)) return false
   return dateToLocalTime(localTimeToDate(l.arriveAt), l.arriveAt.tz).local.slice(0, 10) !== l.departAt.local.slice(0, 10)
 }
 
@@ -164,6 +198,7 @@ const taskForBooking = (bookingId: string) => trip.value?.tasks.find((t) => t.ki
         <h1>{{ trip.name }}</h1>
         <div class="row wrap small" style="margin-top: 0.25rem">
           <span class="chip" :class="{ accent: state === 'current', ok: state === 'upcoming' }">{{ state }}</span>
+          <span v-if="startDate" class="muted">from {{ fmtDate(new Date(startDate + 'T00:00:00'), homeTz, { year: 'numeric' }) }}</span>
           <span v-for="id in trip.typeIds" :key="id" class="chip outline">{{ repo.template(id)?.name ?? id }}</span>
         </div>
       </div>
@@ -178,6 +213,11 @@ const taskForBooking = (bookingId: string) => trip.value?.tasks.find((t) => t.ki
     </div>
 
     <p v-if="trip.notes" style="white-space: pre-wrap">{{ trip.notes }}</p>
+
+    <div v-if="todos.length" class="card">
+      <h2>Trip setup <span class="chip warn">{{ todos.length }}</span></h2>
+      <SetupTodoList :todos="todos" @pick="goTodo" />
+    </div>
 
     <div class="card">
       <div class="row between">
@@ -204,7 +244,7 @@ const taskForBooking = (bookingId: string) => trip.value?.tasks.find((t) => t.ki
       </ul>
     </div>
 
-    <div class="card">
+    <div v-if="showBags" class="card">
       <div class="row between">
         <h2>Bags</h2>
         <div class="row">
@@ -257,6 +297,7 @@ const taskForBooking = (bookingId: string) => trip.value?.tasks.find((t) => t.ki
     <Sheet v-if="editing" title="Edit trip" @close="editing = false">
       <form class="stack" @submit.prevent="saveEdit">
         <label class="field"><span>Name</span><input v-model="draftName" type="text" required /></label>
+        <label class="field"><span>Start date (used until the first leg has a time)</span><input v-model="draftStart" type="date" /></label>
         <div class="field">
           <span class="small muted">Who's going</span>
           <div style="margin-top: 0.3rem"><PersonChips v-model="draftTravellers" :people="people" /></div>

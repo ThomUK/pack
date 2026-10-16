@@ -3,7 +3,8 @@ import { computed } from 'vue'
 import { useRepoStore } from '@/stores/repo'
 import { useUiStore } from '@/stores/ui'
 import { useConfigStore } from '@/stores/config'
-import { tripState, departureDate, endDate, fmtDate, type TripState } from '@/lib/time'
+import { tripState, departureDate, endDate, fmtDate, departureIsEstimate, type TripState } from '@/lib/time'
+import { setupTodos } from '@/lib/setup-todos'
 import { beforeCompletion } from '@/lib/progress'
 import type { Trip } from '@/lib/models'
 import Progress from '@/components/Progress.vue'
@@ -29,7 +30,7 @@ const rows = computed<Row[]>(() =>
 
 const groups = computed(() => {
   const order: TripState[] = ['current', 'upcoming', 'unscheduled', 'archived']
-  const labels: Record<TripState, string> = { current: 'Happening now', upcoming: 'Upcoming', unscheduled: 'No dates yet', archived: 'Past trips' }
+  const labels: Record<TripState, string> = { current: 'Happening now', upcoming: 'Upcoming', unscheduled: 'No date yet', archived: 'Past trips' }
   return order
     .map((state) => ({ state, label: labels[state], rows: rows.value.filter((r) => r.state === state) }))
     .filter((g) => g.rows.length)
@@ -37,11 +38,13 @@ const groups = computed(() => {
 })
 
 function dates(r: Row): string {
-  if (!r.dep || !r.end) return 'No legs yet'
+  if (!r.dep || !r.end) return 'No date yet'
   const a = fmtDate(r.dep, homeTz.value)
   const b = fmtDate(r.end, homeTz.value)
-  return a === b ? a : `${a} – ${b}`
+  const range = a === b ? a : `${a} – ${b}`
+  return departureIsEstimate(r.trip) ? `${range} · no legs yet` : range
 }
+const todoCount = (t: Trip) => setupTodos(t, repo.family?.people ?? [], repo.packingLists(t.id)).length
 </script>
 
 <template>
@@ -64,7 +67,7 @@ function dates(r: Row): string {
           <h3 style="margin: 0">{{ r.trip.name }}</h3>
           <span v-if="cfg.config.currentTripId === r.trip.id" class="chip accent">Current</span>
         </div>
-        <div class="small muted">{{ dates(r) }} · {{ r.trip.travellers.length }} travelling</div>
+        <div class="small muted">{{ dates(r) }} · {{ r.trip.travellers.length }} travelling<span v-if="r.state !== 'archived' && todoCount(r.trip)"> · <span class="due-today">{{ todoCount(r.trip) }} setup items</span></span></div>
         <div v-if="r.state !== 'archived'" style="margin-top: 0.5rem">
           <Progress :done="beforeCompletion(r.trip).done" :total="beforeCompletion(r.trip).total" />
         </div>

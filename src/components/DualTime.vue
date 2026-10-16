@@ -5,7 +5,7 @@ import { dualTime, fmtDate } from '@/lib/time'
 
 const props = defineProps<{ value: LocalTime; homeTimezone: string; withDate?: boolean }>()
 const d = computed(() => dualTime(props.value, props.homeTimezone))
-const date = computed(() => fmtDate(d.value.date, props.value.tz))
+const date = computed(() => (d.value.date ? fmtDate(d.value.date, props.value.tz) : ''))
 </script>
 
 <template>

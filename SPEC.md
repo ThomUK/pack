@@ -97,6 +97,7 @@ Starter templates scaffolded on first run: `ski`, `camping`, `hotel`, `weekend`.
   version: 1,
   id: string,
   name: string,
+  startDate: string,            // YYYY-MM-DD from creation; the countdown uses it until a leg has a time
   typeIds: string[],
   travellers: string[],         // person ids (family members only in v1)
   notes: string,
@@ -156,8 +157,15 @@ Attachment {
 Times abroad: every `LocalTime` is displayed as local time **and** home time
 (e.g. "10:00 CET · 09:00 UK") whenever `tz` differs from `homeTimezone`.
 
-Departure = `legs[0].departAt`. Return start = `returnStartsAtLegId` or the
-first leg after the last `stay`. The trip archives automatically one day after the
+Leg times may be left blank (`local: ''`) while unbooked; such legs sort last and
+are ignored for timing. Departure = the first timed leg's `departAt`, else midnight
+at the start of `startDate`. Return start = `returnStartsAtLegId` or the first leg
+after the last `stay`. The bags section only shows once the itinerary has a flight.
+
+**Trip setup list**: computed (never stored) from the trip: missing legs or leg
+times, flight numbers and booking references, stay addresses, bags when flying,
+check-in tasks with no flight chosen, dangling references, travellers without a
+packing list. Shown on the trip page and as a count on the countdown. The trip archives automatically one day after the
 last leg's `arriveAt` (computed, not stored).
 
 ### 3.4 `trips/<trip-id>/packing/<person-id>.json`

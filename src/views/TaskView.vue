@@ -420,7 +420,7 @@ function dedupe<T extends { name: string }>(items: T[]): T[] {
           <option value="" disabled>Choose a bag</option>
           <option v-for="b in trip.bags" :key="b.id" :value="b.id">{{ b.name }} · {{ personName(b.ownerId) === 'Anyone' ? 'shared' : personName(b.ownerId) }}<template v-if="b.maxKg != null"> · max {{ b.maxKg }} kg</template></option>
         </select>
-        <p v-if="!trip.bags.length" class="small muted">Add bags on the trip page first.</p>
+        <p v-if="!trip.bags.length" class="small muted">Add bags on the trip page first (the bags section appears once the itinerary has a flight).</p>
       </label>
       <div v-if="bag" class="row">
         <input v-model.number="measured" type="number" step="0.1" min="0" placeholder="kg" style="width: 120px" />

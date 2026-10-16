@@ -58,7 +58,7 @@ export interface TripTemplate {
 export type LegKind = 'drive' | 'flight' | 'train' | 'ferry' | 'stay' | 'wait' | 'other'
 
 export interface LocalTime {
-  local: string // "2027-02-14T06:30" (no offset)
+  local: string // "2027-02-14T06:30" (no offset); '' when not known yet
   tz: string // IANA zone
 }
 
@@ -205,6 +205,8 @@ export interface Trip {
   version: 1
   id: string
   name: string
+  /** YYYY-MM-DD, entered at creation. Used for the countdown until legs give an exact time. */
+  startDate: string
   typeIds: string[]
   travellers: string[]
   notes: string

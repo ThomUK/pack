@@ -24,7 +24,7 @@ function setTz(e: Event) {
   <div class="grid-2">
     <label class="field">
       <span>{{ label }}</span>
-      <input type="datetime-local" :value="modelValue.local" required @input="setLocal" />
+      <input type="datetime-local" :value="modelValue.local" @input="setLocal" />
     </label>
     <label class="field">
       <span>Time zone</span>

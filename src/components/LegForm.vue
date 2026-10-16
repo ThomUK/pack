@@ -46,7 +46,7 @@ function autoTitle() {
 
 function submit() {
   autoTitle()
-  if (!draft.departAt.local || !draft.arriveAt.local) return
+  // Times may be left blank; the trip's setup list will nag until they are filled in.
   emit('save', JSON.parse(JSON.stringify(draft)))
 }
 </script>
@@ -71,6 +71,7 @@ function submit() {
     </div>
     <LocalTimeInput v-model="draft.departAt" :label="departLabel" :home-timezone="homeTimezone" />
     <LocalTimeInput v-model="draft.arriveAt" :label="arriveLabel" :home-timezone="homeTimezone" />
+    <p class="small muted" style="margin-top: -0.5rem">Not booked yet? Leave the times blank and the trip setup list will remind you.</p>
 
     <template v-if="draft.kind === 'flight'">
       <div class="grid-2">
