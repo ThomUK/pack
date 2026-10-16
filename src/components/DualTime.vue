@@ -10,7 +10,7 @@ const date = computed(() => fmtDate(d.value.date, props.value.tz))
 
 <template>
   <span class="leg-time">
-    <span v-if="withDate">{{ date }} </span><b>{{ d.local }}</b>
+{{ withDate ? date + ' ' : '' }}<b>{{ d.local }}</b>
     <span v-if="d.home" class="home"> · {{ d.home }} home</span>
   </span>
 </template>
