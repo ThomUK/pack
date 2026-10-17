@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useRepoStore } from '@/stores/repo'
 import { useConfigStore } from '@/stores/config'
 import { useUiStore } from '@/stores/ui'
-import { useCurrentTrip } from '@/composables/useCurrentTrip'
 import { tripOps } from '@/lib/ops'
 import { departureDate, departureIsEstimate, returnDate, returnLeg, datedLegs, countdown, tripState, fmtDateTime, fmtDate, checkinOpensDate, taskDueDate } from '@/lib/time'
 import { setupTodos } from '@/lib/setup-todos'
@@ -15,13 +14,21 @@ import TaskRow from '@/components/TaskRow.vue'
 import DualTime from '@/components/DualTime.vue'
 import Progress from '@/components/Progress.vue'
 
+const props = defineProps<{ id: string }>()
 const repo = useRepoStore()
 const cfg = useConfigStore()
 const ui = useUiStore()
 const router = useRouter()
-const { currentTrip, sorted } = useCurrentTrip()
 
-const trip = currentTrip
+const trip = computed(() => repo.trip(props.id))
+// Opening a trip's countdown makes it the trip the Tasks and Packing tabs follow.
+watch(
+  () => trip.value?.id,
+  (id) => {
+    if (id) cfg.setCurrentTrip(id)
+  },
+  { immediate: true },
+)
 const people = computed(() => repo.family?.people ?? [])
 const homeTz = computed(() => repo.family?.homeTimezone ?? 'UTC')
 const me = computed(() => repo.me())
@@ -97,18 +104,13 @@ function exportCalendar() {
   <div class="page">
     <div v-if="repo.status === 'loading' && !trip" class="empty">Loading…</div>
     <div v-else-if="!trip" class="empty">
-      <h1>No trips yet</h1>
-      <p class="muted">Plan a trip and the countdown will appear here.</p>
-      <router-link class="btn primary" :to="{ name: 'trip-new' }">Plan a trip</router-link>
+      <p>Trip not found.</p>
+      <router-link class="btn" :to="{ name: 'home' }">All countdowns</router-link>
     </div>
     <template v-else>
       <div class="page-head">
-        <div>
-          <h1>{{ trip.name }}</h1>
-          <select v-if="sorted.length > 1" class="small" style="width: auto; min-height: 32px; padding: 0.2rem 0.5rem; margin-top: 0.2rem" :value="trip.id" @change="cfg.setCurrentTrip(($event.target as HTMLSelectElement).value)">
-            <option v-for="x in sorted" :key="x.t.id" :value="x.t.id">{{ x.t.name }}</option>
-          </select>
-        </div>
+        <router-link class="btn ghost" :to="{ name: 'home' }" aria-label="Back to all trips">‹ Trips</router-link>
+        <h1 class="grow" style="font-size: 1.25rem; margin: 0 0.5rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ trip.name }}</h1>
         <router-link class="btn ghost" :to="{ name: 'trip', params: { id: trip.id } }">Details ›</router-link>
       </div>
 

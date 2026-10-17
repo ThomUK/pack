@@ -5,7 +5,8 @@ import { useRepoStore } from './stores/repo'
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/', name: 'home', component: () => import('./views/HomeView.vue') },
+    { path: '/', name: 'home', component: () => import('./views/CountdownListView.vue') },
+    { path: '/countdown/:id', name: 'countdown', component: () => import('./views/TripCountdownView.vue'), props: true },
     { path: '/setup', name: 'setup', component: () => import('./views/SetupView.vue'), meta: { public: true } },
     { path: '/family', name: 'family', component: () => import('./views/FamilyView.vue'), meta: { allowEmpty: true } },
     { path: '/who', name: 'who', component: () => import('./views/WhoView.vue'), meta: { allowNoMe: true } },
