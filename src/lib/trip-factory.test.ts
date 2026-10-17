@@ -56,9 +56,16 @@ describe('createTripFromTemplates', () => {
     expect(packing.map((p) => p.personId).sort()).toEqual(['jane', 'kid1', 'tom'])
     expect(packing.find((p) => p.personId === 'kid1')!.items.some((i) => i.name === 'Ski jacket')).toBe(true)
   })
-  it('pre-fills a document check per traveller', () => {
-    const docs = trip.tasks.find((t) => t.kind === 'documents')!
-    expect((docs.fields as { checks: unknown[] }).checks).toHaveLength(3)
+  it('pre-fills a document check per traveller for passports and GHIC/EHIC cards', () => {
+    const docTasks = trip.tasks.filter((t) => t.kind === 'documents')
+    expect(docTasks).toHaveLength(2)
+    const byType = Object.fromEntries(docTasks.map((t) => [(t.fields as { checks: { docType: string }[] }).checks[0]!.docType, t]))
+    expect(Object.keys(byType).sort()).toEqual(['GHIC / EHIC', 'Passport'])
+    for (const t of docTasks) expect((t.fields as { checks: unknown[] }).checks).toHaveLength(3)
+    expect(byType['GHIC / EHIC']!.due).toEqual({ kind: 'relative', anchor: 'departure', offsetHours: -24 * 42 })
+  })
+  it('packs a GHIC/EHIC card next to the passport', () => {
+    for (const p of packing) expect(p.items.map((i) => i.name)).toEqual(expect.arrayContaining(['Passport', 'GHIC / EHIC card']))
   })
   it('gives checkin tasks default opening rules', () => {
     const ci = trip.tasks.find((t) => t.kind === 'checkin')!

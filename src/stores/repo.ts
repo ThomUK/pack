@@ -9,7 +9,7 @@ import { getTree, getTextFile, putFile, deleteFile, getRawFile, getFileSha, GitH
 import { cacheGet, cacheSet, cacheDel, cacheKeys, cacheClearAll, fileCachePut, fileCacheGet, fileCacheDelete, fileCacheHas } from '@/lib/cache'
 import type { Family, Trip, TripTemplate, PackingList, Attachment } from '@/lib/models'
 import { STARTER_TEMPLATES } from '@/lib/starter-templates'
-import { tripOps } from '@/lib/ops'
+import { tripOps, templateOps } from '@/lib/ops'
 import { uid, nowIso, slugify } from '@/lib/ids'
 
 export type RepoStatus = 'unconfigured' | 'loading' | 'ready' | 'empty' | 'offline' | 'error'
@@ -273,6 +273,38 @@ export const useRepoStore = defineStore('repo', () => {
     }
   }
 
+  /**
+   * Bring the starter templates in the data repo up to date with the ones built
+   * into the app: add tasks and packing items that are missing, never remove or
+   * overwrite anything the family has changed. Returns what was added.
+   */
+  async function refreshStarterTemplates(): Promise<{ created: number; tasks: number; items: number }> {
+    const result = { created: 0, tasks: 0, items: 0 }
+    for (const starter of STARTER_TEMPLATES) {
+      const existing = template(starter.id)
+      if (!existing) {
+        await createFile(templatePath(starter.id), starter, `add starter template ${starter.name}`)
+        result.created++
+        continue
+      }
+      const haveTitles = new Set(existing.tasks.map((t) => t.title.toLowerCase()))
+      for (const t of starter.tasks) {
+        if (haveTitles.has(t.title.toLowerCase())) continue
+        commitTemplate(starter.id, templateOps.upsertTask(t))
+        result.tasks++
+      }
+      for (const list of ['adultDefault', 'child'] as const) {
+        const have = new Set(existing.packing[list].map((i) => i.name.toLowerCase()))
+        const missing = starter.packing[list].filter((i) => !have.has(i.name.toLowerCase()))
+        if (missing.length) {
+          commitTemplate(starter.id, templateOps.addPackingItems(list, missing))
+          result.items += missing.length
+        }
+      }
+    }
+    return result
+  }
+
   async function createTrip(t: Trip, lists: PackingList[]): Promise<void> {
     await createFile(tripPath(t.id), t, `create trip ${t.name}`)
     for (const l of lists) await createFile(packingPath(t.id, l.personId), l, `packing list for ${l.personId}`)
@@ -408,6 +440,7 @@ export const useRepoStore = defineStore('repo', () => {
     createPackingList,
     createTemplate,
     deleteTemplate,
+    refreshStarterTemplates,
     uploadAttachment,
     attachmentBlob,
     setKeepOffline,

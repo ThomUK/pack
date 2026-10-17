@@ -102,14 +102,22 @@ const packingList = computed(() => (trip.value && pack.value ? repo.packing(trip
 const packingProgress = computed(() => packingCompletion(packingList.value))
 
 const tripEnd = computed(() => (trip.value ? endDate(trip.value) : null))
-function docExpiryWarning(expires: string | null): string | null {
+function docExpiryWarning(expires: string | null, docType: string): string | null {
   if (!expires || !tripEnd.value) return null
-  const exp = new Date(expires + 'T00:00:00')
-  if (exp < tripEnd.value) return 'Expires before the trip ends!'
-  const sixMonths = new Date(tripEnd.value.getTime() + 183 * 86400000)
-  if (exp < sixMonths) return 'Less than 6 months left after the trip; some countries require more.'
+  const exp = new Date(expires + 'T23:59:59')
+  if (exp < tripEnd.value) return 'Expires before the trip ends! Renew it now.'
+  if (/passport/i.test(docType)) {
+    const sixMonths = new Date(tripEnd.value.getTime() + 183 * 86400000)
+    if (exp < sixMonths) return 'Less than 6 months left after the trip; some countries require more.'
+  }
   return null
 }
+const docHint = computed(() => {
+  const types = new Set((docs.value?.checks ?? []).map((c) => c.docType.toLowerCase()))
+  if ([...types].some((t) => /ehic|ghic/.test(t))) return 'The expiry date is printed on the front of the card. Renewal is free at nhs.uk and takes up to 10 days.'
+  if ([...types].some((t) => /passport/.test(t))) return 'Check the expiry date on the photo page. Renewal can take 3 weeks or more.'
+  return ''
+})
 function setCheck(i: number, p: Partial<DocumentsTaskFields['checks'][number]>) {
   if (!docs.value) return
   const checks = docs.value.checks.map((c, idx) => (idx === i ? { ...c, ...p } : c))
@@ -117,7 +125,9 @@ function setCheck(i: number, p: Partial<DocumentsTaskFields['checks'][number]>) 
 }
 function addCheck() {
   if (!docs.value) return
-  setFields({ checks: [...docs.value.checks, { personId: travellers.value[0]?.id ?? '', docType: 'EHIC / GHIC', expires: null, checked: false }] })
+  const existing = new Set(docs.value.checks.map((c) => c.docType))
+  const docType = existing.has('GHIC / EHIC') ? (existing.has('Passport') ? 'Travel insurance' : 'Passport') : 'GHIC / EHIC'
+  setFields({ checks: [...docs.value.checks, { personId: travellers.value[0]?.id ?? '', docType, expires: null, checked: false }] })
 }
 function removeCheck(i: number) {
   if (!docs.value) return
@@ -440,6 +450,7 @@ function dedupe<T extends { name: string }>(items: T[]): T[] {
     <!-- Documents -->
     <div v-if="docs" class="card">
       <h2>Documents</h2>
+      <p v-if="docHint" class="small muted">{{ docHint }}</p>
       <ul class="list">
         <li v-for="(c, i) in docs.checks" :key="i" style="align-items: flex-start">
           <input type="checkbox" class="check-big" :checked="c.checked" @change="setCheck(i, { checked: ($event.target as HTMLInputElement).checked })" />
@@ -454,7 +465,7 @@ function dedupe<T extends { name: string }>(items: T[]): T[] {
               <span class="small muted">Expires</span>
               <input type="date" style="width: auto" :value="c.expires ?? ''" @change="setCheck(i, { expires: ($event.target as HTMLInputElement).value || null })" />
             </div>
-            <div v-if="docExpiryWarning(c.expires)" class="small overdue">{{ docExpiryWarning(c.expires) }}</div>
+            <div v-if="docExpiryWarning(c.expires, c.docType)" class="small overdue">{{ docExpiryWarning(c.expires, c.docType) }}</div>
           </div>
           <button class="ghost small danger" @click="removeCheck(i)">✕</button>
         </li>

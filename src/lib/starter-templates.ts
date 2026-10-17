@@ -37,7 +37,20 @@ const items = (names: string[]): PackingItemTemplate[] => names.map((name) => ({
 
 const COMMON_TASKS: TemplateTask[] = [
   task('pack-bag', 'Pack bag', { kind: 'pack', perTraveller: true, due: daysBefore(1) }),
-  task('documents', 'Check passports and documents', { kind: 'documents', due: daysBefore(14), assigneeRole: 'adult' }),
+  task('documents', 'Check passports are valid', {
+    kind: 'documents',
+    due: daysBefore(70),
+    assigneeRole: 'adult',
+    fields: { docType: 'Passport' },
+    notes: 'Many countries need 6 months left after the trip. A renewal can take 3 weeks or more, so check early.',
+  }),
+  task('ehic', 'Check GHIC / EHIC cards are valid', {
+    kind: 'documents',
+    due: daysBefore(42),
+    assigneeRole: 'adult',
+    fields: { docType: 'GHIC / EHIC' },
+    notes: 'Each traveller needs their own card, valid for the whole trip. Renewal is free on the NHS website and the card can take up to 10 days to arrive.',
+  }),
   task('insurance', 'Check travel insurance covers this trip', { due: daysBefore(14), assigneeRole: 'adult' }),
   task('chargers', 'Chargers, cables and power bank', { due: daysBefore(1), checklist: ['Phone chargers', 'Power bank', 'Plug adapters'] }),
   task('house', 'House: bins, heating, lights, plants', { due: { kind: 'relative', anchor: 'departure', offsetHours: -2 }, checklist: ['Bins out', 'Heating set', 'Windows locked', 'Plants watered'] }),
@@ -46,6 +59,7 @@ const COMMON_TASKS: TemplateTask[] = [
 
 const COMMON_ADULT: string[] = [
   'Passport',
+  'GHIC / EHIC card',
   'Wallet and cards',
   'Phone and charger',
   'Toothbrush and toothpaste',
@@ -59,6 +73,7 @@ const COMMON_ADULT: string[] = [
 
 const COMMON_CHILD: string[] = [
   'Passport',
+  'GHIC / EHIC card',
   'Toothbrush and toothpaste',
   'Underwear',
   'Socks',

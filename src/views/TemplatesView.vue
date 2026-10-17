@@ -12,6 +12,19 @@ const router = useRouter()
 const newName = ref('')
 const busy = ref(false)
 
+async function refreshStarters() {
+  busy.value = true
+  try {
+    const r = await repo.refreshStarterTemplates()
+    const parts = [r.created && `${r.created} new template${r.created === 1 ? '' : 's'}`, r.tasks && `${r.tasks} task${r.tasks === 1 ? '' : 's'}`, r.items && `${r.items} packing item${r.items === 1 ? '' : 's'}`].filter(Boolean)
+    ui.toast(parts.length ? `Added ${parts.join(', ')}` : 'Starter templates are already up to date', 'success', 4000)
+  } catch (e) {
+    ui.toast(`Could not refresh: ${e instanceof Error ? e.message : e}`, 'error')
+  } finally {
+    busy.value = false
+  }
+}
+
 async function create() {
   const name = newName.value.trim()
   if (!name) return
@@ -55,5 +68,9 @@ async function create() {
       <input v-model="newName" class="grow" type="text" placeholder="New template name" />
       <button type="submit" :disabled="!newName.trim() || busy || !repo.canEdit">Create</button>
     </form>
+    <div class="card flat small muted" style="margin-top: 1rem">
+      <p>New app versions sometimes add tasks or packing items to the starter templates (ski, camping, hotel, weekend). This adds anything missing to your copies without changing what you've edited.</p>
+      <button class="small" :disabled="busy || !repo.canEdit" @click="refreshStarters">Add new starter items</button>
+    </div>
   </div>
 </template>

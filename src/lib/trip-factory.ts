@@ -107,7 +107,8 @@ export function instantiateTask(
   const t = base(null, null)
   if (tpl.kind === 'documents') {
     const f = t.fields as unknown as DocumentsTaskFields
-    f.checks = travellers.map((p) => ({ personId: p.id, docType: 'Passport', expires: null, checked: false }))
+    const docType = typeof tpl.fields.docType === 'string' ? tpl.fields.docType : 'Passport'
+    f.checks = travellers.map((p) => ({ personId: p.id, docType, expires: null, checked: false }))
   }
   if (tpl.assigneeRole === 'adult' && adults.length === 1) t.assigneeId = adults[0]!.id
   return [t]
