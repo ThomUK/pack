@@ -7,11 +7,34 @@ export type ISODateTime = string // "2027-02-14T06:30:00.000Z"
 export type PersonRole = 'adult' | 'child'
 export type ManagedBy = 'self' | 'parent'
 
+export type DocumentType = 'passport' | 'ghic' | 'licence' | 'visa' | 'insurance' | 'other'
+
+export const DOCUMENT_TYPES: DocumentType[] = ['passport', 'ghic', 'licence', 'visa', 'insurance', 'other']
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  passport: 'Passport',
+  ghic: 'GHIC / EHIC card',
+  licence: 'Driving licence',
+  visa: 'Visa / ETA',
+  insurance: 'Travel insurance',
+  other: 'Other',
+}
+
+/** A travel document that belongs to a person, independent of any trip. */
+export interface PersonDocument {
+  id: string
+  type: DocumentType
+  label: string // free text for 'other', or a note such as "Irish passport"
+  number: string
+  expires: string | null // YYYY-MM-DD
+}
+
 export interface Person {
   id: string
   name: string
   role: PersonRole
   managedBy: ManagedBy
+  documents?: PersonDocument[]
 }
 
 export interface Family {
@@ -174,12 +197,16 @@ export interface PackTaskFields {
 
 export interface DocumentCheck {
   personId: string
-  docType: string
-  expires: string | null // YYYY-MM-DD
   checked: boolean
 }
 
+/**
+ * A documents task checks one document type for every traveller. The documents
+ * themselves (and their expiry dates) live on the person in family.json; the
+ * task only records that someone looked, and reports problems.
+ */
 export interface DocumentsTaskFields {
+  documentType: DocumentType
   checks: DocumentCheck[]
 }
 

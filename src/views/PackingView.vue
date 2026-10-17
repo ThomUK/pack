@@ -9,6 +9,7 @@ import { packingCompletion } from '@/lib/progress'
 import type { PackingItem, TripTemplate, Person } from '@/lib/models'
 import Sheet from '@/components/Sheet.vue'
 import Progress from '@/components/Progress.vue'
+import CheckBox from '@/components/CheckBox.vue'
 
 const props = defineProps<{ id: string; personId?: string }>()
 const repo = useRepoStore()
@@ -157,7 +158,7 @@ function saveToExisting(tpl: TripTemplate) {
       <div class="card">
         <ul class="list">
           <li v-for="i in items" :key="i.id">
-            <input type="checkbox" class="check-big" :checked="i.packed" :disabled="!repo.canEdit" @change="togglePacked(i)" />
+            <CheckBox :checked="i.packed" :disabled="!repo.canEdit" label="Packed" @toggle="togglePacked(i)" />
             <div class="grow">
               <input type="text" :value="i.name" :class="{ done: i.packed }" style="border: none; background: transparent; padding: 0.2rem 0; min-height: 0" @change="rename(i, $event)" />
               <div v-if="i.qty || i.needToBuy" class="small muted">

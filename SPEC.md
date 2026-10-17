@@ -61,8 +61,10 @@ Person {
   id: string,
   name: string,
   role: 'adult' | 'child',
-  managedBy: 'self' | 'parent'  // 'parent' = any adult manages their tasks
+  managedBy: 'self' | 'parent', // 'parent' = any adult manages their tasks
+  documents: PersonDocument[]   // passports, GHIC/EHIC cards… belong to the person, not a trip
 }
+PersonDocument { id, type: passport|ghic|licence|visa|insurance|other, label, number, expires: YYYY-MM-DD|null }
 ```
 
 ### 3.2 `templates/<type-id>.json`
@@ -242,7 +244,7 @@ Typed kinds require their fields before the task can be marked done.
 | `checkin` | legId, opensAt (user-configurable: N hours/days before the leg, or a fixed date/time; airlines vary from 24 h to a month) | boarding pass attached per traveller, or "passes are in the airline app" ticked |
 | `weighBag` | bagId, measuredKg | weight entered; warns when over `maxKg` |
 | `pack` | personId (links to that person's packing file) | all items packed |
-| `documents` | per traveller: document type + expiry date | all travellers checked |
+| `documents` | documentType; one check per traveller | every traveller's document of that type is valid for the trip dates and has been ticked. Expiry problems are reported here and on the trip setup list but fixed on the person in Family. |
 
 Dependencies between tasks: **later**, not v1.
 

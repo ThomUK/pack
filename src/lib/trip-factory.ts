@@ -66,7 +66,7 @@ function defaultFieldsFor(kind: Task['kind'], tplFields: Record<string, unknown>
       return { ...tplFields, ...f }
     }
     case 'documents': {
-      const f: DocumentsTaskFields = { checks: [] }
+      const f: DocumentsTaskFields = { documentType: (tplFields.documentType as DocumentsTaskFields['documentType']) ?? 'passport', checks: [] }
       return { ...tplFields, ...f }
     }
     case 'booking':
@@ -107,8 +107,7 @@ export function instantiateTask(
   const t = base(null, null)
   if (tpl.kind === 'documents') {
     const f = t.fields as unknown as DocumentsTaskFields
-    const docType = typeof tpl.fields.docType === 'string' ? tpl.fields.docType : 'Passport'
-    f.checks = travellers.map((p) => ({ personId: p.id, docType, expires: null, checked: false }))
+    f.checks = travellers.map((p) => ({ personId: p.id, checked: false }))
   }
   if (tpl.assigneeRole === 'adult' && adults.length === 1) t.assigneeId = adults[0]!.id
   return [t]
@@ -241,7 +240,7 @@ function resetFields(t: Task): Record<string, unknown> {
     delete f.reference
   }
   if (t.kind === 'documents') {
-    f.checks = ((f.checks as DocumentsTaskFields['checks']) ?? []).map((c) => ({ ...c, checked: false }))
+    f.checks = ((f.checks as DocumentsTaskFields['checks']) ?? []).map((c) => ({ personId: c.personId, checked: false }))
   }
   return f
 }

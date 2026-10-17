@@ -3,6 +3,7 @@
 import type { Trip, PackingList, Person, CheckinTaskFields, WeighBagTaskFields } from './models'
 import { LEG_KIND_LABELS } from './models'
 import { hasTime, returnLeg, sortedLegs } from './time'
+import { documentProblems } from './documents'
 
 export type SetupTarget =
   | { kind: 'legs' }
@@ -11,6 +12,7 @@ export type SetupTarget =
   | { kind: 'travellers' }
   | { kind: 'task'; taskId: string }
   | { kind: 'packing'; personId: string }
+  | { kind: 'family' }
 
 export interface SetupTodo {
   id: string
@@ -63,6 +65,11 @@ export function setupTodos(trip: Trip, people: Person[], packing: PackingList[])
 
   for (const t of trip.tasks) {
     if (t.status === 'done') continue
+    if (t.kind === 'documents') {
+      for (const a of documentProblems(trip, t, people)) {
+        out.push({ id: `doc-${t.id}-${a.person.id}`, text: `${a.person.name}: ${a.message}. Fix in Family.`, target: { kind: 'family' }, level: 'blocking' })
+      }
+    }
     if (t.kind === 'checkin') {
       const f = t.fields as unknown as CheckinTaskFields
       if (!f.legId) {

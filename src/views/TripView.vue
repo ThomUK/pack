@@ -58,6 +58,9 @@ function goTodo(t: SetupTodo) {
     case 'packing':
       router.push({ name: 'packing', params: { id: tr.id, personId: t.target.personId } })
       break
+    case 'family':
+      router.push({ name: 'family' })
+      break
   }
 }
 

@@ -4,6 +4,7 @@ import type { Task, Trip, Person } from '@/lib/models'
 import { TASK_KIND_LABELS } from '@/lib/models'
 import { describeDue, taskDueDate, dueState } from '@/lib/time'
 import { useUiStore } from '@/stores/ui'
+import CheckBox from './CheckBox.vue'
 
 const props = defineProps<{ task: Task; trip: Trip; people: Person[]; homeTimezone: string; showAssignee?: boolean }>()
 const emit = defineEmits<{ toggle: [Task]; open: [Task] }>()
@@ -19,13 +20,7 @@ const quickTick = computed(() => props.task.kind === 'generic' || props.task.sta
 
 <template>
   <li class="task-row">
-    <input
-      type="checkbox"
-      class="check-big"
-      :checked="task.status === 'done'"
-      :title="quickTick ? '' : 'Open to complete'"
-      @click.stop.prevent="quickTick ? emit('toggle', task) : emit('open', task)"
-    />
+    <CheckBox :checked="task.status === 'done'" :label="quickTick ? 'Done' : 'Open to complete'" @toggle="quickTick ? emit('toggle', task) : emit('open', task)" />
     <div class="grow" style="cursor: pointer" @click="emit('open', task)">
       <div class="title" :class="{ done: task.status === 'done' }">{{ task.title }}</div>
       <div class="meta">

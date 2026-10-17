@@ -85,7 +85,7 @@ function addTask() {
         : nKind.value === 'pack'
           ? { personId: nAssignee.value ?? '' }
           : nKind.value === 'documents'
-            ? { checks: t.travellers.map((personId) => ({ personId, docType: 'Passport', expires: null, checked: false })) }
+            ? { documentType: 'passport', checks: t.travellers.map((personId) => ({ personId, checked: false })) }
             : nKind.value === 'booking'
               ? { bookingKind: 'other' }
               : {}

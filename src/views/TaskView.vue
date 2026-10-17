@@ -5,7 +5,7 @@ import { useRepoStore } from '@/stores/repo'
 import { useUiStore } from '@/stores/ui'
 import { tripOps, templateOps } from '@/lib/ops'
 import { uid, nowIso } from '@/lib/ids'
-import { checkinOpensDate, fmtDateTime, describeDue, sortedLegs, endDate, countdown } from '@/lib/time'
+import { checkinOpensDate, fmtDateTime, describeDue, sortedLegs, countdown } from '@/lib/time'
 import { packingCompletion } from '@/lib/progress'
 import { prepareFile } from '@/lib/files'
 import { mergeTemplateTasks } from '@/lib/trip-factory'
@@ -21,7 +21,6 @@ import {
   type Booking,
   type BookingKind,
   type CheckinTaskFields,
-  type DocumentsTaskFields,
   type WeighBagTaskFields,
   type PackTaskFields,
 } from '@/lib/models'
@@ -29,6 +28,9 @@ import Sheet from '@/components/Sheet.vue'
 import DueEditor from '@/components/DueEditor.vue'
 import AttachmentList from '@/components/AttachmentList.vue'
 import Progress from '@/components/Progress.vue'
+import CheckBox from '@/components/CheckBox.vue'
+import { assessTask, documentsFields, documentNoun } from '@/lib/documents'
+import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS, type DocumentType } from '@/lib/models'
 
 const props = defineProps<{ id: string; taskId: string }>()
 const repo = useRepoStore()
@@ -51,7 +53,6 @@ const setFields = (f: Record<string, unknown>) => task.value && commit(tripOps.s
 const checkin = computed(() => (task.value?.kind === 'checkin' ? (task.value.fields as unknown as CheckinTaskFields) : null))
 const weigh = computed(() => (task.value?.kind === 'weighBag' ? (task.value.fields as unknown as WeighBagTaskFields) : null))
 const pack = computed(() => (task.value?.kind === 'pack' ? (task.value.fields as unknown as PackTaskFields) : null))
-const docs = computed(() => (task.value?.kind === 'documents' ? (task.value.fields as unknown as DocumentsTaskFields) : null))
 const booking = computed(() => (task.value?.kind === 'booking' ? task.value.fields : null))
 
 const flightLegs = computed(() => (trip.value ? sortedLegs(trip.value).filter((l) => l.kind === 'flight' || l.kind === 'train' || l.kind === 'ferry') : []))
@@ -101,38 +102,29 @@ const overLimit = computed(() => bag.value && measured.value != null && bag.valu
 const packingList = computed(() => (trip.value && pack.value ? repo.packing(trip.value.id, pack.value.personId) : null))
 const packingProgress = computed(() => packingCompletion(packingList.value))
 
-const tripEnd = computed(() => (trip.value ? endDate(trip.value) : null))
-function docExpiryWarning(expires: string | null, docType: string): string | null {
-  if (!expires || !tripEnd.value) return null
-  const exp = new Date(expires + 'T23:59:59')
-  if (exp < tripEnd.value) return 'Expires before the trip ends! Renew it now.'
-  if (/passport/i.test(docType)) {
-    const sixMonths = new Date(tripEnd.value.getTime() + 183 * 86400000)
-    if (exp < sixMonths) return 'Less than 6 months left after the trip; some countries require more.'
-  }
-  return null
+const docFields = computed(() => (task.value?.kind === 'documents' ? documentsFields(task.value) : null))
+const docAssessments = computed(() => (trip.value && task.value?.kind === 'documents' ? assessTask(trip.value, task.value, people.value) : []))
+const docProblems = computed(() => docAssessments.value.filter((a) => a.status === 'problem' || a.status === 'missing'))
+const docChecked = (personId: string) => !!docFields.value?.checks.find((c) => c.personId === personId)?.checked
+function setDocChecked(personId: string, checked: boolean) {
+  if (!docFields.value) return
+  const others = docFields.value.checks.filter((c) => c.personId !== personId)
+  setFields({ documentType: docFields.value.documentType, checks: [...others, { personId, checked }] })
+}
+function setDocType(e: Event) {
+  if (!docFields.value) return
+  setFields({ documentType: (e.target as HTMLSelectElement).value as DocumentType, checks: docFields.value.checks.map((c) => ({ ...c, checked: false })) })
 }
 const docHint = computed(() => {
-  const types = new Set((docs.value?.checks ?? []).map((c) => c.docType.toLowerCase()))
-  if ([...types].some((t) => /ehic|ghic/.test(t))) return 'The expiry date is printed on the front of the card. Renewal is free at nhs.uk and takes up to 10 days.'
-  if ([...types].some((t) => /passport/.test(t))) return 'Check the expiry date on the photo page. Renewal can take 3 weeks or more.'
-  return ''
+  switch (docFields.value?.documentType) {
+    case 'ghic':
+      return 'The expiry date is printed on the front of the card. Renewal is free at nhs.uk and takes up to 10 days.'
+    case 'passport':
+      return 'Check the expiry date on the photo page. Renewal can take 3 weeks or more.'
+    default:
+      return ''
+  }
 })
-function setCheck(i: number, p: Partial<DocumentsTaskFields['checks'][number]>) {
-  if (!docs.value) return
-  const checks = docs.value.checks.map((c, idx) => (idx === i ? { ...c, ...p } : c))
-  setFields({ checks })
-}
-function addCheck() {
-  if (!docs.value) return
-  const existing = new Set(docs.value.checks.map((c) => c.docType))
-  const docType = existing.has('GHIC / EHIC') ? (existing.has('Passport') ? 'Travel insurance' : 'Passport') : 'GHIC / EHIC'
-  setFields({ checks: [...docs.value.checks, { personId: travellers.value[0]?.id ?? '', docType, expires: null, checked: false }] })
-}
-function removeCheck(i: number) {
-  if (!docs.value) return
-  setFields({ checks: docs.value.checks.filter((_, idx) => idx !== i) })
-}
 
 // Booking fields
 const bookingKind = computed(() => (booking.value?.bookingKind as BookingKind) ?? 'other')
@@ -181,8 +173,11 @@ const blocker = computed<string | null>(() => {
       return null
     case 'pack':
       return packingProgress.value.total && packingProgress.value.done < packingProgress.value.total ? `${packingProgress.value.total - packingProgress.value.done} items still to pack.` : null
-    case 'documents':
-      return docs.value?.checks.every((c) => c.checked) ? null : 'Tick every document once checked.'
+    case 'documents': {
+      if (docProblems.value.length) return `Fix in Family first: ${docProblems.value.map((a) => `${a.person.name} (${a.message})`).join('; ')}.`
+      const unchecked = docAssessments.value.filter((a) => !docChecked(a.person.id))
+      return unchecked.length ? `Tick each traveller once you have looked at their ${documentNoun(docFields.value!.documentType)}.` : null
+    }
     default:
       return null
   }
@@ -322,7 +317,7 @@ function dedupe<T extends { name: string }>(items: T[]): T[] {
 
     <div class="card">
       <div class="row" style="align-items: flex-start">
-        <input type="checkbox" class="check-big" :checked="task.status === 'done'" :disabled="!repo.canEdit" @click.prevent="toggleDone" />
+        <CheckBox :checked="task.status === 'done'" :disabled="!repo.canEdit" label="Done" @toggle="toggleDone" />
         <div class="grow">
           <h1 style="font-size: 1.25rem" :class="{ done: task.status === 'done' }">{{ task.title }}</h1>
           <div class="row wrap small muted">
@@ -448,29 +443,28 @@ function dedupe<T extends { name: string }>(items: T[]): T[] {
     </div>
 
     <!-- Documents -->
-    <div v-if="docs" class="card">
-      <h2>Documents</h2>
+    <div v-if="docFields" class="card">
+      <div class="row between">
+        <h2>Documents</h2>
+        <select style="width: auto" class="small" :value="docFields.documentType" @change="setDocType">
+          <option v-for="d in DOCUMENT_TYPES" :key="d" :value="d">{{ DOCUMENT_TYPE_LABELS[d] }}</option>
+        </select>
+      </div>
       <p v-if="docHint" class="small muted">{{ docHint }}</p>
       <ul class="list">
-        <li v-for="(c, i) in docs.checks" :key="i" style="align-items: flex-start">
-          <input type="checkbox" class="check-big" :checked="c.checked" @change="setCheck(i, { checked: ($event.target as HTMLInputElement).checked })" />
+        <li v-for="a in docAssessments" :key="a.person.id" style="align-items: flex-start">
+          <CheckBox :checked="docChecked(a.person.id)" :disabled="!repo.canEdit || a.status === 'missing' || a.status === 'problem'" :label="`Checked ${a.person.name}`" @toggle="setDocChecked(a.person.id, !docChecked(a.person.id))" />
           <div class="grow">
-            <div class="row">
-              <select style="width: auto" :value="c.personId" @change="setCheck(i, { personId: ($event.target as HTMLSelectElement).value })">
-                <option v-for="p in travellers" :key="p.id" :value="p.id">{{ p.name }}</option>
-              </select>
-              <input class="grow" type="text" :value="c.docType" @change="setCheck(i, { docType: ($event.target as HTMLInputElement).value })" />
-            </div>
-            <div class="row" style="margin-top: 0.3rem">
-              <span class="small muted">Expires</span>
-              <input type="date" style="width: auto" :value="c.expires ?? ''" @change="setCheck(i, { expires: ($event.target as HTMLInputElement).value || null })" />
-            </div>
-            <div v-if="docExpiryWarning(c.expires, c.docType)" class="small overdue">{{ docExpiryWarning(c.expires, c.docType) }}</div>
+            <div>{{ a.person.name }}<span v-if="a.document?.label" class="muted small"> · {{ a.document.label }}</span><span v-if="a.document?.number" class="muted small"> · {{ a.document.number }}</span></div>
+            <div class="small" :class="{ overdue: a.status === 'problem' || a.status === 'missing', 'due-today': a.status === 'warn', muted: a.status === 'ok' }">{{ a.message }}</div>
           </div>
-          <button class="ghost small danger" @click="removeCheck(i)">✕</button>
+          <span class="chip" :class="{ ok: a.status === 'ok', warn: a.status === 'warn', danger: a.status === 'problem' || a.status === 'missing' }">{{ a.status === 'ok' ? 'valid' : a.status === 'warn' ? 'check' : a.status === 'missing' ? 'missing' : 'expires' }}</span>
         </li>
       </ul>
-      <button class="small" style="margin-top: 0.5rem" @click="addCheck">+ Document</button>
+      <p class="small muted" style="margin-top: 0.5rem">
+        Documents and expiry dates belong to each person, not the trip.
+        <router-link :to="{ name: 'family' }">Update them in Family</router-link>.
+      </p>
     </div>
 
     <!-- Checklist -->
@@ -478,7 +472,7 @@ function dedupe<T extends { name: string }>(items: T[]): T[] {
       <h2>Checklist</h2>
       <ul class="list">
         <li v-for="c in task.checklist" :key="c.id">
-          <input type="checkbox" class="check-big" :checked="c.done" @change="commit(tripOps.setChecklistItem(task!.id, c.id, ($event.target as HTMLInputElement).checked))" />
+          <CheckBox :checked="c.done" :disabled="!repo.canEdit" @toggle="commit(tripOps.setChecklistItem(task!.id, c.id, !c.done))" />
           <span class="grow" :class="{ done: c.done }">{{ c.name }}</span>
           <button class="ghost small danger" @click="commit(tripOps.removeChecklistItem(task!.id, c.id))">✕</button>
         </li>
